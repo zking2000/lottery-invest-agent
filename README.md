@@ -1,12 +1,6 @@
 # Lottery Invest Agent
 
-本项目是一个面向 OpenClaw 的双色球自动化 watcher，用于：
-
-- 初始化并缓存历史开奖数据
-- 在购票窗口前生成当期推荐号码
-- 支持通过消息即时获取 `1组` 或 `5组` 推荐
-- 在开奖后刷新最新一期号码并自动对比是否中奖
-- 通过 iMessage 把推荐结果和开奖对比结果发回用户
+[中文说明](./README.zh-CN.md)
 
 This project is an OpenClaw-friendly Double Color Ball watcher that:
 
@@ -18,33 +12,33 @@ This project is an OpenClaw-friendly Double Color Ball watcher that:
 
 ## Features
 
-- 本地缓存优先：默认不在每次请求时联网抓全量历史
-- 默认推荐数量为 `5组`，需要时也可显式改成 `1组`
-- 支持定时推送和即时取号两种模式
-- 开奖后自动对比并给出奖级、命中组数、固定奖预计金额等信息
-- 仓库默认不包含个人手机号、本地缓存和运行态状态文件
+- Local-cache-first workflow that avoids refetching full history on every request
+- Default recommendation size of `5 picks`, with optional explicit `1 pick` requests
+- Both scheduled pushes and on-demand reply flows
+- Automatic post-draw comparison with prize level, winning count, and estimated fixed-prize total
+- Public repo layout that excludes personal phone numbers, local cache, and runtime state
 
 ## Project Layout
 
-- `scripts/ssq_agent.py`: 主入口 / Main entry
-- `config.json`: 本地配置 / Local config
-- `config.example.json`: 公开模板配置 / Public template config
-- `state/runtime.json`: 本地运行状态 / Local runtime state
-- `data/history_ssq.json`: 本地历史缓存 / Local history cache
-- `skills/ssq-watcher/SKILL.md`: OpenClaw skill 说明
-- `tests/test_ssq_agent.py`: 最小必要测试 / Focused tests
+- `scripts/ssq_agent.py`: main entry point
+- `config.json`: local private config
+- `config.example.json`: public template config
+- `state/runtime.json`: local runtime state
+- `data/history_ssq.json`: local draw cache
+- `skills/ssq-watcher/SKILL.md`: OpenClaw skill notes
+- `tests/test_ssq_agent.py`: focused unit tests
 
 ## Quick Start
 
-1. 复制 `config.example.json` 为你自己的 `config.json`，填入 `notification.target`。
-2. 首次执行 `bootstrap-history` 把历史开奖拉到本地。
-3. 用 `snapshot` 或 `reply` 生成推荐号码。
-4. 用 `install-cron` 把推送和开奖后刷新任务安装到 OpenClaw。
+1. Copy `config.example.json` to `config.json` and fill in `notification.target`.
+2. Run `bootstrap-history` once to save the historical draws locally.
+3. Use `snapshot` or `reply` to generate picks.
+4. Use `install-cron` to install the push and refresh jobs into OpenClaw.
 
 ```bash
 python3 ./scripts/ssq_agent.py bootstrap-history
 python3 ./scripts/ssq_agent.py snapshot
-python3 ./scripts/ssq_agent.py reply --request "来5组当期号码"
+python3 ./scripts/ssq_agent.py reply --request "give me 5 picks for this issue"
 python3 ./scripts/ssq_agent.py install-cron --agent-id ssq-watcher
 ```
 
@@ -56,8 +50,8 @@ python3 ./scripts/ssq_agent.py refresh-latest
 python3 ./scripts/ssq_agent.py compare-latest
 python3 ./scripts/ssq_agent.py snapshot
 python3 ./scripts/ssq_agent.py snapshot --count 5
-python3 ./scripts/ssq_agent.py reply --request "来1组双色球"
-python3 ./scripts/ssq_agent.py reply --request "来5组双色球"
+python3 ./scripts/ssq_agent.py reply --request "give me 1 pick"
+python3 ./scripts/ssq_agent.py reply --request "give me 5 picks"
 python3 ./scripts/ssq_agent.py run-once --send --dry-run
 python3 ./scripts/ssq_agent.py send-test --dry-run
 python3 ./scripts/ssq_agent.py install-cron --agent-id ssq-watcher
@@ -66,31 +60,31 @@ python3 -m unittest tests/test_ssq_agent.py
 
 ## Data Flow
 
-- `bootstrap-history`: 首次抓取一次历史开奖到 `data/history_ssq.json`
-- `snapshot` / `reply` / `run-once`: 默认只读取本地缓存
-- `refresh-latest`: 开奖后只刷新最新一期到本地
-- `compare-latest`: 对比本地最新一期开奖结果和已发给用户的号码
+- `bootstrap-history`: fetches historical draws once into `data/history_ssq.json`
+- `snapshot` / `reply` / `run-once`: read from local cache by default
+- `refresh-latest`: updates only the latest official draw after publish time
+- `compare-latest`: compares the newest official result against issued picks
 
 ## Official Refresh Fallbacks
 
-`refresh-latest` 会按以下顺序尝试官方链路：
+`refresh-latest` tries the following official sources in order:
 
-1. 中国福彩网开奖页 HTML
-2. 中国福彩网开奖页当前引用的数据源
-3. 旧版中国福彩网开奖接口
+1. China Welfare Lottery draw page HTML
+2. The current data source referenced by that page
+3. The legacy China Welfare Lottery draw API
 
-如果这些链路都不可用，系统会保留现有本地缓存，不会退回到每次全量抓历史。
+If all of them fail, the existing local cache is preserved instead of falling back to a full-history fetch.
 
 ## Default Schedule
 
-- 推荐推送：`Asia/Shanghai` 时区下周二、周四、周日 `18:30`
-- 开奖刷新：`Asia/Shanghai` 时区下周二、周四、周日 `21:25`
+- Recommendation push: `18:30` on Tuesday, Thursday, and Sunday in `Asia/Shanghai`
+- Result refresh: `21:25` on Tuesday, Thursday, and Sunday in `Asia/Shanghai`
 
 ## Notes
 
-- 默认推荐数量是 `5组`
-- 即时取号支持“双色球”“来1组”“来5组”“当期号码”等消息
-- 每次真正提供给用户的号码都会按期记录到 `state/runtime.json`
-- 开奖后会自动生成对比结果，包含开奖号码、奖级分布、最高奖级、固定奖预计金额
-- 如果本地 watcher 没跑成功，正确行为是提示暂时无法读取推荐，而不是随机编号码
-- 这是娱乐参考工具，不承诺中奖概率或收益
+- The default recommendation size is `5 picks`
+- On-demand requests support messages such as "双色球", "来1组", "来5组", and "当期号码"
+- Every issued recommendation is recorded into `state/runtime.json` by issue
+- Post-draw comparison messages include winning numbers, prize breakdown, highest prize, and estimated fixed-prize total
+- If the local watcher fails, the correct behavior is to say the current recommendation is unavailable instead of inventing numbers
+- This is an entertainment reference tool and does not promise winning probability or returns
