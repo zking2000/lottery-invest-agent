@@ -1,0 +1,60 @@
+{
+  "lottery": {
+    "name": "双色球",
+    "region": "陕西风采",
+    "timezone": "Asia/Shanghai",
+    "draw_weekdays": [
+      1,
+      3,
+      6
+    ],
+    "sales_close_time": "20:00",
+    "draw_time": "21:15",
+    "history_count": 180
+  },
+  "fetch": {
+    "endpoint": "https://jc.zhcw.com/port/client_json.php",
+    "page_size": 100,
+    "http_timeout_seconds": 20,
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+    "referer": "https://www.zhcw.com/kjxx/ssq/",
+    "cache_path": "data/history_ssq.json",
+    "official_latest_url": "https://cwlgovcn.com/ygkj/wqkjgg/ssq/",
+    "official_api_url": "https://cwlball.com/ssg/result.php?cmode=resultlist",
+    "official_legacy_url": "https://www.cwl.gov.cn/cwl_admin/kjxx/findDrawNotice?name=ssq",
+    "official_timeout_seconds": 20
+  },
+  "recommendation": {
+    "count": 5,
+    "candidate_pool_size": 2400,
+    "candidate_shortlist_size": 12,
+    "random_seed": null,
+    "max_repeat_reds_with_last_draw": 2,
+    "disclaimer": "基于历史分布、规则过滤和 LLM 排序生成，仅供娱乐参考，不构成收益承诺。"
+  },
+  "notification": {
+    "enabled": true,
+    "channel": "imessage",
+    "target": "",
+    "message_prefix": "陕西风采双色球推荐"
+  },
+  "llm": {
+    "enabled": true,
+    "provider": "yinli",
+    "model": "claude-sonnet-4-6",
+    "base_url": "",
+    "api_key": "",
+    "timeout_seconds": 120,
+    "temperature": 0.2,
+    "max_tokens": 900
+  },
+  "cron": {
+    "name": "ssq-watcher-window-push",
+    "expression": "30 18 * * 0,2,4",
+    "timezone": "Asia/Shanghai",
+    "message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh run-once --send`。若当前不在购买窗口或本窗口已推送，则简短说明原因；不要编造号码。",
+    "refresh_name": "ssq-refresh-latest-result",
+    "refresh_expression": "25 21 * * 0,2,4",
+    "refresh_message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh refresh-latest`，仅从中国福彩网更新最新一期到本地缓存；若官网尚未更新则简短说明原因。"
+  }
+}
