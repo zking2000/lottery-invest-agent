@@ -47,6 +47,13 @@ class SsqAgentTests(unittest.TestCase):
         self.assertTrue(summary["is_winner"])
         self.assertEqual(summary["winning_entries"], 2)
         self.assertEqual(summary["highest_prize"], "一等奖")
+        self.assertEqual(summary["prize_breakdown"], {"一等奖": 1, "三等奖": 1})
+        self.assertEqual(summary["fixed_prize_total"], 3000)
+        self.assertEqual(summary["floating_prize_entries"], 1)
+
+    def test_default_recommendation_count_is_five(self) -> None:
+        config = ssq_agent.deep_merge(ssq_agent.DEFAULT_CONFIG, {})
+        self.assertEqual(config["recommendation"]["count"], 5)
 
     def test_extract_official_latest_draw(self) -> None:
         html = """

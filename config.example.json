@@ -35,8 +35,9 @@
   "notification": {
     "enabled": true,
     "channel": "imessage",
-    "target": "",
-    "message_prefix": "陕西风采双色球推荐"
+    "target": "+8613800138000",
+    "message_prefix": "陕西风采双色球推荐",
+    "comparison_prefix": "陕西风采双色球开奖对比"
   },
   "llm": {
     "enabled": true,

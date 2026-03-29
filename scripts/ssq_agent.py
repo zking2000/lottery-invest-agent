@@ -34,6 +34,12 @@ OFFICIAL_FIELD_PATTERNS = {
     "detail_link": re.compile(r'<div class="ssqXqLink-dom">\s*([^<]+)\s*</div>'),
 }
 OFFICIAL_JSON_ISSUE_PATTERN = re.compile(r"^\d{7}$")
+FIXED_PRIZE_AMOUNTS = {
+    "三等奖": 3000,
+    "四等奖": 200,
+    "五等奖": 10,
+    "六等奖": 5,
+}
 
 
 def resolve_project_dir() -> Path:
@@ -602,6 +608,15 @@ def determine_prize_level(red_matches: int, blue_match: bool) -> str | None:
     return None
 
 
+def prize_amount_label(prize: str | None) -> str:
+    if not prize:
+        return "未中奖"
+    amount = FIXED_PRIZE_AMOUNTS.get(prize)
+    if amount is None:
+        return f"{prize}（浮动奖金）"
+    return f"{prize}（预计 {amount} 元）"
+
+
 def compare_selected_numbers_against_draw(
     selected: list[dict[str, Any]], draw: DrawResult
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -609,6 +624,9 @@ def compare_selected_numbers_against_draw(
     winning_entries = 0
     highest_prize_rank = 99
     highest_prize_name = ""
+    fixed_prize_total = 0
+    floating_prize_entries = 0
+    prize_breakdown: Counter[str] = Counter()
     prize_rank = {
         "一等奖": 1,
         "二等奖": 2,
@@ -627,10 +645,16 @@ def compare_selected_numbers_against_draw(
         prize = determine_prize_level(red_match_count, blue_match)
         if prize:
             winning_entries += 1
+            prize_breakdown[prize] += 1
             current_rank = prize_rank[prize]
             if current_rank < highest_prize_rank:
                 highest_prize_rank = current_rank
                 highest_prize_name = prize
+            fixed_amount = FIXED_PRIZE_AMOUNTS.get(prize)
+            if fixed_amount is None:
+                floating_prize_entries += 1
+            else:
+                fixed_prize_total += fixed_amount
         comparisons.append(
             {
                 "index": index,
@@ -639,6 +663,7 @@ def compare_selected_numbers_against_draw(
                 "red_match_count": red_match_count,
                 "blue_match": blue_match,
                 "prize": prize,
+                "prize_amount_label": prize_amount_label(prize),
                 "numbers_text": f"红球 {' '.join(normalize_ball(number) for number in reds)} | 蓝球 {normalize_ball(blue)}",
             }
         )
@@ -648,6 +673,9 @@ def compare_selected_numbers_against_draw(
         "winning_entries": winning_entries,
         "highest_prize": highest_prize_name or "未中奖",
         "is_winner": winning_entries > 0,
+        "prize_breakdown": dict(prize_breakdown),
+        "fixed_prize_total": fixed_prize_total,
+        "floating_prize_entries": floating_prize_entries,
     }
     return comparisons, summary
 
@@ -660,22 +688,42 @@ def build_comparison_message(
     comparisons: list[dict[str, Any]],
     summary: dict[str, Any],
 ) -> str:
+    source_text = {
+        "push": "定时主动推送",
+        "reply": "即时消息取号",
+        "legacy-last-analysis": "历史记录迁移",
+    }.get(str(issued_record.get("source", "")), str(issued_record.get("source", "")) or "未知来源")
+
     lines = [
         f"{config['notification']['comparison_prefix']}（第 {issue} 期）",
         f"开奖号码: {format_draw_numbers(draw)}",
+        f"对比来源: {source_text}",
+        f"记录时间: {issued_record.get('issued_at', '')}",
         "",
     ]
     for comparison in comparisons:
-        prize_text = comparison["prize"] or "未中奖"
+        prize_text = comparison["prize_amount_label"]
         lines.append(
             f"{comparison['index']}. {comparison['numbers_text']} -> 命中红球 {comparison['red_match_count']} 个，"
             f"蓝球 {'命中' if comparison['blue_match'] else '未中'}，结果：{prize_text}"
         )
+
+    prize_breakdown = summary.get("prize_breakdown", {})
+    breakdown_text = (
+        "，".join(f"{name}{count}组" for name, count in prize_breakdown.items())
+        if prize_breakdown
+        else "无"
+    )
+    fixed_total = int(summary.get("fixed_prize_total", 0))
+    floating_entries = int(summary.get("floating_prize_entries", 0))
     lines.extend(
         [
             "",
             f"本次对比的是你收到的第 {issue} 期推荐号码，共 {summary['total_entries']} 组。",
             f"结果汇总: {'有中奖' if summary['is_winner'] else '未中奖'}；命中 {summary['winning_entries']} 组；最高奖级：{summary['highest_prize']}",
+            f"奖级分布: {breakdown_text}",
+            f"固定奖预计合计: {fixed_total} 元",
+            f"浮动奖命中组数: {floating_entries}",
         ]
     )
     return "\n".join(lines)

@@ -1,5 +1,10 @@
 __pycache__/
 *.pyc
 .DS_Store
+config.json
+config.local.json
+*.local.json
+.env
+.env.*
 state/runtime.json
 data/history_ssq.json

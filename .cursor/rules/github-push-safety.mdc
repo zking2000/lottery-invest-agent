@@ -1,0 +1,14 @@
+---
+description: Require sensitive-data scan before any GitHub push
+alwaysApply: true
+---
+
+# GitHub Push Safety
+
+- Before any GitHub push, repo creation, or visibility change, scan staged and unstaged content for sensitive data.
+- If the same project exists in multiple synced copies, scan the code that will be pushed and the synced copy for sensitive data before pushing.
+- Treat API keys, tokens, passwords, phone numbers, personal email addresses, local absolute paths, runtime state files, caches, and credentials as sensitive by default.
+- Treat local config files, `.env*`, `config.json`, runtime state, cached draw data, message targets, and any user-identifying settings as sensitive unless they are clearly sanitized templates.
+- Do not push until sensitive content has been removed, redacted, ignored, or explicitly approved by the user.
+- Re-scan after sanitizing and only push when the repository is clean.
+- If there is any doubt about whether content is sensitive, stop and ask instead of pushing.
