@@ -179,8 +179,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "timezone": "Asia/Shanghai",
         "message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh run-once --send`。若当前不在购买窗口或本窗口已推送，则简短说明原因；不要编造号码。",
         "refresh_name": "ssq-refresh-latest-result",
-        "refresh_expression": "25 21 * * 0,2,4",
-        "refresh_message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh refresh-latest`，仅从中国福彩网更新最新一期到本地缓存；若官网尚未更新则简短说明原因。",
+        "refresh_expression": "15 22 * * 0,2,4",
+        "refresh_message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh refresh-latest`，在开奖后约1小时刷新最新期开奖结果、自动对比上一期推荐是否中奖，并继续发送下一期5组号码与购买截止时间；若官网尚未更新则简短说明原因。",
     },
 }
 
@@ -300,6 +300,17 @@ def format_candidate_line(index: int, candidate: Candidate, reason: str | None =
 def format_draw_numbers(draw: DrawResult) -> str:
     reds = " ".join(normalize_ball(number) for number in draw.reds)
     return f"红球 {reds} | 蓝球 {normalize_ball(draw.blue)}"
+
+
+def purchase_deadline_for_target(target_date: date, config: dict[str, Any]) -> datetime:
+    close_hour, close_minute = parse_hhmm(config["lottery"]["sales_close_time"])
+    tz = ZoneInfo(str(config["lottery"]["timezone"]))
+    return datetime.combine(target_date, time(close_hour, close_minute), tzinfo=tz)
+
+
+def format_purchase_deadline(target_date: date, config: dict[str, Any]) -> str:
+    deadline = purchase_deadline_for_target(target_date, config)
+    return deadline.strftime("%Y-%m-%d %H:%M")
 
 
 def fetch_jsonp(url: str, *, timeout: int, headers: dict[str, str]) -> Any:
@@ -691,6 +702,7 @@ def build_comparison_message(
     source_text = {
         "push": "定时主动推送",
         "reply": "即时消息取号",
+        "post-draw-followup": "开奖后自动续推",
         "legacy-last-analysis": "历史记录迁移",
     }.get(str(issued_record.get("source", "")), str(issued_record.get("source", "")) or "未知来源")
 
@@ -1236,6 +1248,7 @@ def build_message(
 ) -> str:
     lines = [
         f"{config['notification']['message_prefix']}（第 {target_issue} 期，开奖日 {target_date.isoformat()}）",
+        f"购买截止: {format_purchase_deadline(target_date, config)}",
         "",
     ]
     for index, (candidate, reason) in enumerate(selected, start=1):
@@ -1275,8 +1288,7 @@ def send_message_via_openclaw(config: dict[str, Any], message: str) -> subproces
     )
 
 
-def analyze(config: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
-    history = get_history_for_analysis(config, state)
+def analyze_with_history(config: dict[str, Any], state: dict[str, Any], history: list[DrawResult]) -> dict[str, Any]:
     if not history:
         raise RuntimeError("未获取到历史开奖数据。")
     stats = build_stats(history)
@@ -1314,6 +1326,11 @@ def analyze(config: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     state["last_analysis"] = result
     state["last_message_preview"] = message
     return result
+
+
+def analyze(config: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    history = get_history_for_analysis(config, state)
+    return analyze_with_history(config, state, history)
 
 
 def sent_window_key(issue: str, target_date: date) -> str:
@@ -1402,6 +1419,34 @@ def handle_bootstrap_history(_args: argparse.Namespace, config: dict[str, Any], 
     return 0
 
 
+def send_post_draw_followup_recommendation(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    history: list[DrawResult],
+    *,
+    send_notification: bool,
+) -> tuple[dict[str, Any] | None, bool]:
+    followup_config = deep_merge(config, {})
+    followup_config["recommendation"]["count"] = 5
+    result = analyze_with_history(followup_config, state, history)
+    window_key = sent_window_key(result["target_issue"], date.fromisoformat(result["target_draw_date"]))
+    if has_sent_window(state, window_key):
+        return result, False
+
+    did_send = False
+    if send_notification and followup_config["notification"]["enabled"]:
+        send_message_via_openclaw(followup_config, result["message"])
+        did_send = True
+    record_issued_recommendation(
+        state,
+        result,
+        source="post-draw-followup",
+        shared_via_message=did_send,
+    )
+    mark_sent_window(state, window_key)
+    return result, did_send
+
+
 def handle_refresh_latest(_args: argparse.Namespace, config: dict[str, Any], state: dict[str, Any]) -> int:
     history, changed, message = refresh_latest_from_official(config, state)
     print(message)
@@ -1418,6 +1463,18 @@ def handle_refresh_latest(_args: argparse.Namespace, config: dict[str, Any], sta
             print("已通过 iMessage 发送对比结果。")
         else:
             print("对比结果已存在或本次未发送。")
+    followup_result, followup_sent = send_post_draw_followup_recommendation(
+        config,
+        state,
+        history,
+        send_notification=True,
+    )
+    if followup_result:
+        print(f"已生成下一期推荐：{followup_result['target_issue']}")
+        if followup_sent:
+            print("已通过 iMessage 发送下一期 5 组推荐。")
+        else:
+            print("下一期推荐已存在或本次未发送。")
     return 0 if history else 1
 
 
@@ -1475,6 +1532,7 @@ def handle_install_cron(args: argparse.Namespace, config: dict[str, Any], _state
         "--thinking",
         "off",
         "--light-context",
+        "--no-deliver",
         "--exact",
         "--json",
     ]
@@ -1495,6 +1553,7 @@ def handle_install_cron(args: argparse.Namespace, config: dict[str, Any], _state
         "--thinking",
         "off",
         "--light-context",
+        "--no-deliver",
         "--exact",
         "--json",
     ]

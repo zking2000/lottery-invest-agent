@@ -15,7 +15,7 @@ This project is an OpenClaw-friendly Double Color Ball watcher that:
 - Local-cache-first workflow that avoids refetching full history on every request
 - Default recommendation size of `5 picks`, with optional explicit `1 pick` requests
 - Both scheduled pushes and on-demand reply flows
-- Automatic post-draw comparison with prize level, winning count, and estimated fixed-prize total
+- Automatic post-draw comparison within about one hour after draw time, plus the next issue's 5 picks and purchase deadline
 - Public repo layout that excludes personal phone numbers, local cache, and runtime state
 
 ## Project Layout
@@ -62,7 +62,7 @@ python3 -m unittest tests/test_ssq_agent.py
 
 - `bootstrap-history`: fetches historical draws once into `data/history_ssq.json`
 - `snapshot` / `reply` / `run-once`: read from local cache by default
-- `refresh-latest`: updates only the latest official draw after publish time
+- `refresh-latest`: updates the latest official draw, compares the issued picks, and sends the next issue's 5 picks
 - `compare-latest`: compares the newest official result against issued picks
 
 ## Official Refresh Fallbacks
@@ -78,7 +78,7 @@ If all of them fail, the existing local cache is preserved instead of falling ba
 ## Default Schedule
 
 - Recommendation push: `18:30` on Tuesday, Thursday, and Sunday in `Asia/Shanghai`
-- Result refresh: `21:25` on Tuesday, Thursday, and Sunday in `Asia/Shanghai`
+- Result refresh and next-issue follow-up: `22:15` on Tuesday, Thursday, and Sunday in `Asia/Shanghai`
 
 ## Notes
 
@@ -86,5 +86,6 @@ If all of them fail, the existing local cache is preserved instead of falling ba
 - On-demand requests support messages such as "双色球", "来1组", "来5组", and "当期号码"
 - Every issued recommendation is recorded into `state/runtime.json` by issue
 - Post-draw comparison messages include winning numbers, prize breakdown, highest prize, and estimated fixed-prize total
+- The post-draw flow also sends the next issue's 5 picks and the purchase deadline
 - If the local watcher fails, the correct behavior is to say the current recommendation is unavailable instead of inventing numbers
 - This is an entertainment reference tool and does not promise winning probability or returns

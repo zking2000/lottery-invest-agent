@@ -55,7 +55,7 @@
     "timezone": "Asia/Shanghai",
     "message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh run-once --send`。若当前不在购买窗口或本窗口已推送，则简短说明原因；不要编造号码。",
     "refresh_name": "ssq-refresh-latest-result",
-    "refresh_expression": "25 21 * * 0,2,4",
-    "refresh_message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh refresh-latest`，仅从中国福彩网更新最新一期到本地缓存；若官网尚未更新则简短说明原因。"
+    "refresh_expression": "15 22 * * 0,2,4",
+    "refresh_message": "请调用双色球 watcher：运行 `/path/to/lottery-invest-agent/run_ssq_agent.sh refresh-latest`，在开奖后约1小时刷新最新期开奖结果、自动对比上一期推荐是否中奖，并继续发送下一期5组号码与购买截止时间；若官网尚未更新则简短说明原因。"
   }
 }

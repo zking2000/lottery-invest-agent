@@ -5,6 +5,7 @@ import sys
 import unittest
 from datetime import date, datetime
 from pathlib import Path
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 
@@ -54,6 +55,70 @@ class SsqAgentTests(unittest.TestCase):
     def test_default_recommendation_count_is_five(self) -> None:
         config = ssq_agent.deep_merge(ssq_agent.DEFAULT_CONFIG, {})
         self.assertEqual(config["recommendation"]["count"], 5)
+
+    def test_build_message_includes_purchase_deadline(self) -> None:
+        config = ssq_agent.deep_merge(ssq_agent.DEFAULT_CONFIG, {})
+        candidate = ssq_agent.Candidate(
+            reds=[1, 8, 12, 19, 27, 30],
+            blue=9,
+            heuristic_score=1.0,
+            features={"sum": 97, "span": 29, "odd_count": 3, "even_count": 3, "zones": (2, 2, 2)},
+        )
+        message = ssq_agent.build_message(
+            "2026034",
+            date(2026, 3, 29),
+            [(candidate, "测试理由")],
+            "测试摘要",
+            config,
+        )
+        self.assertIn("购买截止: 2026-03-29 20:00", message)
+
+    def test_post_draw_followup_sends_five_picks_and_marks_window(self) -> None:
+        config = ssq_agent.deep_merge(ssq_agent.DEFAULT_CONFIG, {})
+        state = ssq_agent.deep_merge(ssq_agent.DEFAULT_STATE, {})
+        history = [
+            ssq_agent.DrawResult(
+                issue="2026033",
+                open_date=date(2026, 3, 26),
+                reds=[3, 6, 13, 21, 28, 29],
+                blue=6,
+                sale_money=397739574,
+                prize_pool_money=2203784926,
+            )
+        ]
+        captured: dict[str, object] = {}
+
+        def fake_analyze_with_history(config_arg, state_arg, history_arg):
+            captured["count"] = config_arg["recommendation"]["count"]
+            captured["history_issue"] = history_arg[0].issue
+            return {
+                "generated_at": "2026-03-26T14:15:00+00:00",
+                "target_issue": "2026034",
+                "target_draw_date": "2026-03-29",
+                "latest_draw_issue": "2026033",
+                "latest_draw_date": "2026-03-26",
+                "selected": [{"reds": [1, 2, 3, 4, 5, 6], "blue": 7, "reason": "测试"}],
+                "summary": "测试摘要",
+                "message": "下一期推荐消息",
+            }
+
+        with patch.object(ssq_agent, "analyze_with_history", side_effect=fake_analyze_with_history), patch.object(
+            ssq_agent, "send_message_via_openclaw", return_value=None
+        ):
+            result, did_send = ssq_agent.send_post_draw_followup_recommendation(
+                config,
+                state,
+                history,
+                send_notification=True,
+            )
+
+        self.assertEqual(captured["count"], 5)
+        self.assertEqual(captured["history_issue"], "2026033")
+        self.assertTrue(did_send)
+        self.assertEqual(result["target_issue"], "2026034")
+        self.assertIn("2026034", state["issued_recommendations"])
+        self.assertEqual(state["issued_recommendations"]["2026034"]["source"], "post-draw-followup")
+        self.assertIn("2026034@2026-03-29", state["sent_windows"])
 
     def test_extract_official_latest_draw(self) -> None:
         html = """
